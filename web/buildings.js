@@ -284,7 +284,7 @@ const BuildingLoader = (() => {
         }
       }
     }
-    await Promise.all(Array.from({ length: 6 }, worker));
+    await Promise.all(Array.from({ length: 10 }, worker));
 
     let buildings = out;
     if (buildings.length > MAX_BUILDINGS) {
@@ -364,16 +364,40 @@ const BuildingLoader = (() => {
     return steps;
   }
 
-  /* 範囲(bbox)の建物を返す。 戻り値: { buildings, source: 'osm'|'mesh', detail } */
+  /* 範囲(bbox)の建物を返す。 戻り値: { buildings, source: 'osm'|'mesh', detail }
+   * 取得の順番: ①OSMのベクトルタイル(OpenFreeMap: 並列で数十秒・安定) → ②Overpass API(混雑すると数分〜十数分) → ③メッシュ */
   async function load({ bbox, stopHeat, center, extraPoints = [] }, onProgress) {
-    let steps = null;
+    const ctr = center || [(bbox.w + bbox.e) / 2, (bbox.s + bbox.n) / 2];
     let osmFailed = false;
-    onProgress(0, 'OpenStreetMap(Overpass API)に接続中…');
-    if (!(await ping())) {
-      osmFailed = true;
-      steps = null;
-    } else {
-      steps = await plan(bbox, center || [(bbox.w + bbox.e) / 2, (bbox.s + bbox.n) / 2], onProgress);
+
+    // ① ベクトルタイル
+    onProgress(0, 'OSMの建物を取得中…');
+    let tilesWorked = false;
+    try {
+      const t = await loadOsmTiles(bbox, ctr, onProgress, extraPoints);
+      if (t) {
+        tilesWorked = t.failed < t.tiles * 0.3;   // タイルの大半を取得できていれば、この範囲の建物数は信頼できる
+        if (t.buildings.length >= MIN_OSM_BUILDINGS) {
+          const note = t.failed ? ` ※取得できなかったタイルが${t.failed}個あります` : '';
+          return {
+            buildings: t.buildings, source: 'osm',
+            detail: `OpenStreetMap(ベクトルタイル・中心部は詳細/周辺は高い建物中心) ${t.buildings.length.toLocaleString()}棟${note}`,
+          };
+        }
+      }
+    } catch (e) {
+      console.warn('OSM tile route failed:', e && e.message);
+    }
+
+    // ② タイルを取得できなかった場合だけ Overpass API を試す(取得できたのに建物が少ない=建物の少ない地域は、メッシュへ)
+    let steps = null;
+    if (!tilesWorked) {
+      onProgress(0, 'ベクトルタイルを取得できないため、Overpass APIで建物を取得中…');
+      if (!(await ping())) {
+        osmFailed = true;
+      } else {
+        steps = await plan(bbox, ctr, onProgress);
+      }
     }
     if (steps) {
       const seen = new Set();
@@ -381,7 +405,6 @@ const BuildingLoader = (() => {
       const all = [];
       const parts = [];
       // 範囲全体を「タグ付きの建物」に絞っている場合でも、JRが通る場所はすべての建物を出す
-      const ctr = center || [(bbox.w + bbox.e) / 2, (bbox.s + bbox.n) / 2];
       if (extraPoints.length && steps[0].filter.id !== 'all') {
         steps.push({ corridor: true, boxes: corridorBoxes(extraPoints, ctr), label: 'JR沿線: すべての建物' });
       }
@@ -401,22 +424,8 @@ const BuildingLoader = (() => {
       osmFailed = stats.failed > 0;
     }
 
-    // Overpass APIが使えない/建物が足りない場合は、同じOSM由来のベクトルタイル(OpenFreeMap)から取得する
-    onProgress(0, osmFailed ? 'Overpass APIが混雑しているため、別経路(OpenFreeMap)でOSMの建物を取得中…' : 'OSMのベクトルタイルで建物を確認中…');
-    try {
-      const t = await loadOsmTiles(bbox, center || [(bbox.w + bbox.e) / 2, (bbox.s + bbox.n) / 2], onProgress, extraPoints);
-      if (t && t.buildings.length >= MIN_OSM_BUILDINGS) {
-        const note = t.failed ? ` ※取得できなかったタイルが${t.failed}個あります` : '';
-        return {
-          buildings: t.buildings, source: 'osm',
-          detail: `OpenStreetMap(ベクトルタイル・中心部は詳細/周辺は高い建物中心) ${t.buildings.length.toLocaleString()}棟${note}`,
-        };
-      }
-    } catch (e) {
-      console.warn('OSM tile fallback failed:', e && e.message);
-    }
-
-    onProgress(0.5, 'OSMの建物が少ないため、メッシュで代替中…');
+    // ③ メッシュ
+    onProgress(0.5, osmFailed ? 'OSMを取得できなかったため、メッシュで代替中…' : 'OSMの建物が少ないため、メッシュで代替中…');
     const buildings = buildMesh(stopHeat, bbox);
     const why = osmFailed ? ' ※OSM取得に失敗したため代替' : '';
     return { buildings, source: 'mesh', detail: `250mメッシュ(運行頻度) ${buildings.length.toLocaleString()}セル${why}` };

@@ -67,7 +67,7 @@ const Home = (() => {
         <b>ご利用にあたって</b><br>
         ・GTFSの処理はすべてこの端末のブラウザ内で行い、GTFSファイルはサーバーへ送信されません。作成した都市もこの端末内にだけ保存されます。<br>
         ・運行は、GTFSから選んだ代表的な平日ダイヤ1日分です。<br>
-        ・建物はOpenStreetMap(Overpass API)から範囲内の建物数に応じて自動で絞り込んで取得します。OSMに建物がほとんど無い地域は、運行頻度から作る250mメッシュで代替します(PLATEAUは1タイルが約13MBと重いため対象外)。<br>
+        ・建物はOpenStreetMap(© OpenStreetMap contributors。ベクトルタイルは OpenFreeMap / © OpenMapTiles)から取得します。中心部は細かい建物まで、周辺は高い建物中心に絞ります。取得できない場合はOverpass API、OSMに建物がほとんど無い地域は、運行頻度から作る250mメッシュで代替します(PLATEAUは1タイルが約13MBと重いため対象外)。<br>
         ・都市の規模によっては数分かかります。処理中はこのページを閉じないでください。<br>
         ・鉄道の運行データには、公共交通オープンデータセンターが提供するデータ(JR東日本ほか。JR東日本分は公共交通オープンデータチャレンジ限定ライセンス)を利用しています。情報の正確性・完全性は保証されません。表示内容や操作に関するお問い合わせは、データ提供者ではなく、こちらの<a href="https://github.com/nicchizuofficial-debug/city-pulse-app/issues" target="_blank" rel="noopener">GitHub Issues</a>へお願いします。
       </div>
