@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+server.log
+pipeline/.odpt_token
+data/buildings_3d.json.bak
+.claude/settings.local.json
+data/_test/
+data/anim_cache/jreast_*
