@@ -4,6 +4,19 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>都市の鼓動 | City Pulse</title>
+<meta name="description" content="公共交通の時刻表(GTFS)から、街の24時間の“鼓動”を3Dで鑑賞するビジュアライザー。GTFSをドロップすれば、どの街でも同じ体験をつくれます。" />
+<meta name="theme-color" content="#03040a" />
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="都市の鼓動 (CITY PULSE)" />
+<meta property="og:title" content="都市の鼓動 — CITY PULSE" />
+<meta property="og:description" content="公共交通の時刻表(GTFS)から、街の24時間の“鼓動”を3Dで鑑賞するビジュアライザー。GTFSをドロップすれば、どの街でも。" />
+<meta property="og:url" content="https://city-pulse-v0lm.onrender.com/" />
+<meta property="og:image" content="https://city-pulse-v0lm.onrender.com/static/ogp.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta name="twitter:card" content="summary_large_image" />
 <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
 <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
 <script src="https://unpkg.com/deck.gl@9.0.31/dist.min.js"></script>
@@ -12,53 +25,119 @@
 <script src="/static/mvt.js"></script>
 <script src="/static/buildings.js"></script>
 <script src="/static/home.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;500;700&family=Shippori+Mincho+B1:wght@600;800&display=swap" rel="stylesheet">
 <style>
+  :root {
+    --bg:#03040a; --ink:#f1f5f9; --ink2:#cbd5e1; --mute:#8b98ad; --dim:#56627a;
+    --rail:#5eead4; --bus:#fb923c; --line:rgba(255,255,255,0.08); --glass:rgba(6,10,22,0.55);
+    --serif:'Shippori Mincho B1','Noto Serif JP',serif;
+    --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
   * { box-sizing: border-box; }
-  html, body { margin:0; padding:0; height:100%; width:100%; background:#03040a; overflow:hidden;
-    font-family:'Inter','Noto Sans JP',-apple-system,sans-serif; }
+  html, body { margin:0; padding:0; height:100%; width:100%; background:var(--bg); overflow:hidden;
+    font-family:'Inter','Noto Sans JP',-apple-system,sans-serif; -webkit-font-smoothing:antialiased; }
   #map { position:absolute; inset:0; }
 
   #skyFx { position:absolute; inset:0; z-index:2; pointer-events:none; mix-blend-mode:soft-light; transition: background 1.2s ease; }
   #weatherFx { position:absolute; inset:0; z-index:3; pointer-events:none; opacity:0; transition:opacity 1s ease; }
   #weatherFx.heat { opacity:1; background:radial-gradient(circle at 50% 25%, rgba(234,88,12,0.20), rgba(3,4,10,0.10) 70%); }
+  /* 周辺減光 + 上下の帯(HUDの読みやすさ) + ごく薄い粒子 */
   #vignette { position:absolute; inset:0; z-index:4; pointer-events:none;
-    box-shadow: inset 0 0 18vw 2vw rgba(0,0,0,0.55); }
+    box-shadow: inset 0 0 18vw 2vw rgba(0,0,0,0.55);
+    background: linear-gradient(to bottom, rgba(3,4,10,0.5) 0%, rgba(3,4,10,0) 20%, rgba(3,4,10,0) 70%, rgba(3,4,10,0.62) 100%); }
+  #vignette::after { content:''; position:absolute; inset:0; opacity:0.05;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
 
+  /* 読み込み中: 心電図の光が走る */
   #loading { position:absolute; inset:0; z-index:20; display:flex; flex-direction:column; align-items:center;
-    justify-content:center; gap:14px; background:#03040a; color:#94a3b8; transition:opacity 0.9s ease; }
-  #loading .lg { font-size: 1.6rem; font-weight:800; color:#e2e8f0; letter-spacing:0.06em; }
-  #loading .sp { width:34px; height:34px; border-radius:50%; border:2.5px solid #1e293b; border-top-color:#5eead4; animation:spin 0.9s linear infinite; }
-  @keyframes spin { to { transform:rotate(360deg); } }
+    justify-content:center; gap:10px; color:var(--mute); transition:opacity 0.9s ease;
+    background: radial-gradient(700px 420px at 50% 42%, rgba(94,234,212,0.08), transparent 65%), var(--bg); }
+  #loading .ekg { width:min(300px, 70vw); height:64px; overflow:visible; margin-bottom:10px; }
+  #loading .ekg path { fill:none; stroke-linejoin:round; stroke-linecap:round; vector-effect:non-scaling-stroke; }
+  #loading .ekg .base { stroke:rgba(94,234,212,0.16); stroke-width:1; }
+  #loading .ekg .trace { stroke:url(#loadEkgGrad); stroke-width:2.2; stroke-dasharray:24 76; animation:ekgTrace 1.8s linear infinite;
+    filter:drop-shadow(0 0 6px rgba(94,234,212,0.8)); }
+  @keyframes ekgTrace { from { stroke-dashoffset:100; } to { stroke-dashoffset:0; } }
+  #loading .lt { font-family:var(--serif); font-size:2rem; font-weight:800; color:var(--ink); letter-spacing:0.2em; padding-left:0.2em; }
+  #loading .le { font-family:var(--mono); font-size:0.62rem; letter-spacing:0.5em; padding-left:0.5em; color:var(--rail); opacity:0.8; }
+  #loading .lg { margin-top:18px; max-width:560px; padding:0 20px; text-align:center; font-size:0.8rem; line-height:1.7; color:var(--mute); letter-spacing:0.08em; }
   #loading.hidden { opacity:0; pointer-events:none; }
 
-  #topHud { position:absolute; top:22px; left:26px; right:26px; z-index:6; display:flex;
+  /* タイトル */
+  #topHud { position:absolute; top:24px; left:28px; right:28px; z-index:6; display:flex;
     justify-content:space-between; align-items:flex-start; pointer-events:none; }
-  #titleBlock { color:#f1f5f9; text-shadow: 0 2px 18px rgba(0,0,0,0.6); display:flex; flex-direction:column; align-items:center; }
-  #titleBlock .t { font-size:1.5rem; font-weight:800; letter-spacing:0.04em; display:flex; align-items:center; gap:10px; }
-  #titleBlock .s { font-size:0.72rem; color:#94a3b8; margin-top:2px; letter-spacing:0.08em; }
-  #titleBlock .sub2 { display:flex; align-items:center; gap:8px; margin-top:4px; font-size:0.62rem; }
-  #titleBlock .c { color:#cbd5e1; font-weight:700; letter-spacing:0.04em; }
+  #titleBlock { color:var(--ink); text-shadow: 0 2px 22px rgba(0,0,0,0.75); display:flex; flex-direction:column; align-items:center; }
+  /* --p: 鼓動の強さ(0〜1.x、運行数に応じた心拍でJSが毎フレーム更新) / --tod: 時間帯の色(r,g,b) */
+  #topHud, #statsHud, #pulseWrap { --p:0; --tod:190,225,255; }
+  #titleBlock .t { font-family:var(--serif); font-size:1.65rem; font-weight:800; line-height:1.15; letter-spacing:0.18em; padding-left:0.18em;
+    text-shadow:0 2px 22px rgba(0,0,0,0.75), 0 0 calc(6px + var(--p) * 22px) rgba(var(--tod), calc(0.08 + var(--p) * 0.5)); }
+  #titleBlock .s { display:flex; align-items:center; gap:8px; margin-top:7px; font-family:var(--mono); font-size:0.56rem;
+    letter-spacing:0.46em; color:var(--rail); opacity:0.9; }
+  #titleBlock .s::before, #titleBlock .s::after { content:''; width:16px; height:1px; }
+  #titleBlock .s::before { background:linear-gradient(90deg, transparent, rgba(94,234,212,0.8)); margin-right:0.46em; }
+  #titleBlock .s::after { background:linear-gradient(90deg, rgba(251,146,60,0.8), transparent); }
+  #titleBlock .sub2 { display:flex; align-items:center; gap:8px; margin-top:10px; font-size:0.66rem; }
+  #titleBlock .c { color:var(--ink2); font-weight:500; letter-spacing:0.08em; }
   #titleBlock .c:empty { display:none; }
-  #titleBlock .h { color:#94a3b8; text-decoration:none; pointer-events:auto; letter-spacing:0.04em; }
-  #titleBlock .h:hover { color:#5eead4; }
+  #titleBlock .h { color:var(--ink2); text-decoration:none; pointer-events:auto; letter-spacing:0.06em; text-shadow:none;
+    padding:4px 12px 4px 10px; border-radius:999px; background:var(--glass); border:1px solid var(--line);
+    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); transition:color .2s, border-color .2s, background .2s; }
+  #titleBlock .h:hover { color:var(--rail); border-color:rgba(94,234,212,0.45); background:rgba(94,234,212,0.1); }
 
-  #statsHud { position:absolute; top:26px; left:50%; transform:translateX(-50%); z-index:6; text-align:center;
-    pointer-events:none; color:#f8fafc; text-shadow:0 2px 20px rgba(0,0,0,0.7); }
-  #clockDisplay { font-family:'Inter',monospace; font-size:2.6rem; font-weight:800; letter-spacing:0.03em; line-height:1; }
-  #statLine { font-size:0.74rem; color:#cbd5e1; margin-top:4px; letter-spacing:0.04em; }
-  #statLine .rail-label { color:#5eead4; }
-  #statLine .bus-label { color:#fb923c; }
-  #statLine b { font-weight:800; }
+  /* 時計と稼働数 */
+  #statsHud { position:absolute; top:20px; left:50%; transform:translateX(-50%); z-index:6; text-align:center;
+    pointer-events:none; color:#fff; }
+  #clockDisplay { font-family:'Inter',sans-serif; font-size:3.4rem; font-weight:200; letter-spacing:0.02em; line-height:1;
+    font-variant-numeric:tabular-nums; font-feature-settings:'tnum' 1;
+    text-shadow:0 0 30px rgba(var(--tod),0.28), 0 2px 26px rgba(0,0,0,0.8); }
+  #clockDisplay.chime { animation:chime 1.4s ease-out; }
+  @keyframes chime {
+    0% { text-shadow:0 0 18px rgba(var(--tod),0.95), 0 0 46px rgba(var(--tod),0.7), 0 2px 26px rgba(0,0,0,0.8); }
+    100% { text-shadow:0 0 30px rgba(var(--tod),0.28), 0 2px 26px rgba(0,0,0,0.8); }
+  }
+  #todLabel { display:flex; align-items:center; justify-content:center; gap:10px; margin-top:8px; height:0.9rem;
+    font-size:0.62rem; letter-spacing:0.16em; color:rgb(var(--tod)); text-shadow:0 1px 12px rgba(0,0,0,0.9); }
+  #todLabel .en { font-family:var(--mono); font-size:0.56rem; letter-spacing:0.34em; opacity:0.85; }
+  #todLabel .en::after { content:''; display:inline-block; width:14px; height:1px; margin:0 0 3px 10px; background:rgba(var(--tod),0.5); }
+  #statLine { display:flex; align-items:center; justify-content:center; gap:8px; margin-top:12px;
+    font-size:0.72rem; color:var(--ink2); letter-spacing:0.06em; white-space:nowrap; }
+  #statLine .live { display:inline-flex; align-items:center; gap:7px; margin-right:2px; font-size:0.64rem; letter-spacing:0.16em;
+    color:var(--ink2); text-shadow:0 1px 12px rgba(0,0,0,0.9); }
+  #statLine .live::before { content:''; width:6px; height:6px; border-radius:50%; background:rgb(var(--tod));
+    transform:scale(calc(1 + var(--p) * 0.55));
+    box-shadow:0 0 calc(2px + var(--p) * 12px) rgba(var(--tod), calc(0.35 + var(--p) * 0.55)); }
+  #statLine .chip { display:inline-flex; align-items:baseline; gap:6px; padding:5px 13px 5px 11px; border-radius:999px;
+    background:var(--glass); border:1px solid var(--line); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); }
+  #statLine .chip i { align-self:center; width:7px; height:7px; border-radius:50%; background:currentColor; box-shadow:0 0 10px currentColor; }
+  #statLine .chip b { font-size:0.98rem; font-weight:600; font-variant-numeric:tabular-nums; min-width:2.2ch; text-align:right; letter-spacing:0.02em; }
+  #statLine .chip small { font-size:0.62rem; opacity:0.7; }
+  #statLine .rail-label { color:var(--rail); border-color:rgba(94,234,212,0.22); }
+  #statLine .bus-label { color:var(--bus); border-color:rgba(251,146,60,0.22); }
 
-  #pulseWrap { position:absolute; left:0; right:0; bottom:0; z-index:6; padding:10px 22px 16px; pointer-events:auto; }
-  #pulseLabels { display:flex; justify-content:space-between; font-size:0.62rem; color:#64748b; margin-bottom:2px; padding:0 2px; }
-  #pulseChart { position:relative; height:78px; border-radius:12px; background:rgba(3,6,16,0.5); backdrop-filter:blur(6px);
-    border:1px solid rgba(255,255,255,0.06); cursor:pointer; overflow:hidden; }
+  /* 鼓動チャート */
+  #pulseWrap { position:absolute; left:0; right:0; bottom:0; z-index:6; padding:10px 28px 16px; pointer-events:auto; }
+  #pulseLabels { display:flex; justify-content:space-between; font-family:var(--mono); font-size:0.58rem; color:var(--mute);
+    letter-spacing:0.08em; margin-bottom:6px; padding:0 2px; text-shadow:0 1px 10px rgba(0,0,0,0.9); }
+  #pulseChart { position:relative; height:80px; border-radius:14px; cursor:pointer; overflow:hidden;
+    background:
+      linear-gradient(to right, rgba(255,255,255,0.075) 1px, transparent 1px) 0 0 / 25% 100%,
+      linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px) 0 0 / calc(100% / 24) 100%,
+      linear-gradient(180deg, rgba(12,18,36,0.6), rgba(3,6,16,0.72));
+    border:1px solid rgba(255,255,255,0.08);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 16px 44px -12px rgba(0,0,0,0.7);
+    backdrop-filter:blur(10px) saturate(1.2); -webkit-backdrop-filter:blur(10px) saturate(1.2); }
   #pulseSvg { width:100%; height:100%; display:block; }
-  #pulsePlayhead { position:absolute; top:0; bottom:0; width:2px; background:#f8fafc; box-shadow:0 0 10px 2px rgba(248,250,252,0.7);
-    pointer-events:none; transform:translateX(-1px); }
-  #pulseHint { text-align:center; font-size:0.62rem; color:#475569; margin-top:6px; letter-spacing:0.03em; }
+  #pulsePlayhead { position:absolute; top:0; bottom:0; width:1.5px; pointer-events:none; transform:translateX(-0.75px);
+    background:linear-gradient(to bottom, #fff, rgba(var(--tod),0.4)); box-shadow:0 0 12px 1px rgba(var(--tod),0.6); }
+  #pulsePlayhead::before { content:''; position:absolute; top:6px; left:50%; width:7px; height:7px; margin-left:-3.5px; border-radius:50%;
+    background:#fff; transform:scale(calc(1 + var(--p) * 0.45));
+    box-shadow:0 0 0 3px rgba(var(--tod),0.18), 0 0 calc(10px + var(--p) * 14px) 2px rgba(var(--tod),0.8); }
+  /* 再生位置より右(これからの時間帯)を少し沈める */
+  #pulsePlayhead::after { content:''; position:absolute; top:0; bottom:0; left:1.5px; width:200vw;
+    background:linear-gradient(90deg, rgba(3,6,16,0.12), rgba(3,6,16,0.46) 48px); }
+  #pulseHint { text-align:center; font-size:0.62rem; color:var(--dim); margin-top:8px; letter-spacing:0.06em; }
   #pulseHint .hint-touch { display:none; }
   #pulseChart { touch-action:none; }
 
@@ -67,26 +146,61 @@
     #pulseHint .hint-touch { display:inline; }
   }
 
+  /* MapLibreの操作ボタン・出典をダークガラスに */
+  .maplibregl-ctrl-top-right { top:14px; right:14px; }
+  .maplibregl-ctrl-group:not(:empty) { background:rgba(6,10,22,0.6); border:1px solid var(--line); border-radius:12px; overflow:hidden;
+    box-shadow:0 10px 30px -8px rgba(0,0,0,0.6); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); }
+  .maplibregl-ctrl-group button { width:32px; height:32px; }
+  .maplibregl-ctrl-group button + button { border-top:1px solid rgba(255,255,255,0.07); }
+  .maplibregl-ctrl-group button:not(:disabled):hover { background-color:rgba(94,234,212,0.12); }
+  .maplibregl-ctrl-group button .maplibregl-ctrl-icon { filter:invert(1) brightness(0.85); }
+  .maplibregl-ctrl.maplibregl-ctrl-attrib { background:rgba(3,4,10,0.55); color:var(--dim); font-size:10px; border-radius:8px 0 0 0; }
+  .maplibregl-ctrl-attrib a { color:var(--mute); }
+  .maplibregl-ctrl.maplibregl-ctrl-attrib.maplibregl-compact { background:rgba(6,10,22,0.7); border:1px solid var(--line); border-radius:12px; }
+  .maplibregl-ctrl-attrib-button { filter:invert(1) brightness(0.8); }
+
+  /* 読み込み完了後、HUDをふわっと出す(:has 非対応ブラウザではそのまま表示) */
+  #map:has(#loading.hidden) #topHud { animation:hudIn 1s cubic-bezier(.2,.7,.2,1) backwards 0.1s; }
+  #map:has(#loading.hidden) #statsHud { animation:hudInC 1s cubic-bezier(.2,.7,.2,1) backwards 0.2s; }
+  #map:has(#loading.hidden) #pulseWrap { animation:hudUp 1s cubic-bezier(.2,.7,.2,1) backwards 0.3s; }
+  @keyframes hudIn { from { opacity:0; transform:translateY(-8px); } }
+  @keyframes hudInC { from { opacity:0; transform:translate(-50%, -8px); } }
+  @keyframes hudUp { from { opacity:0; transform:translateY(12px); } }
+  @media (prefers-reduced-motion: reduce) {
+    #loading .ekg .trace, #statLine .live::before { animation:none; }
+    #map:has(#loading.hidden) #topHud, #map:has(#loading.hidden) #statsHud, #map:has(#loading.hidden) #pulseWrap { animation:none; }
+  }
+
   /* スマホ・狭い画面: タイトル・時計・稼働数が重ならないよう縦に積む */
   @media (max-width: 640px) {
     #topHud { top:14px; left:14px; right:60px; }
     #titleBlock { align-items:flex-start; }
-    #titleBlock .t { font-size:1.15rem; }
-    #titleBlock .s { font-size:0.6rem; }
+    #titleBlock .t { font-size:1.2rem; letter-spacing:0.14em; padding-left:0; }
+    #titleBlock .s { font-size:0.5rem; margin-top:5px; }
+    #titleBlock .s::before { display:none; }
 
-    #statsHud { top:72px; width:calc(100% - 28px); max-width:360px; }
-    #titleBlock .sub2 { font-size:0.58rem; margin-top:3px; }
-    #clockDisplay { font-size:2rem; }
-    #statLine { font-size:0.68rem; margin-top:3px; letter-spacing:0.02em; white-space:nowrap; }
+    #statsHud { top:78px; width:calc(100% - 28px); max-width:380px; }
+    #titleBlock .sub2 { font-size:0.6rem; margin-top:7px; }
+    #clockDisplay { font-size:2.5rem; }
+    #todLabel { margin-top:5px; }
+    #statLine { gap:6px; font-size:0.66rem; margin-top:8px; letter-spacing:0.02em; }
+    #statLine .live { font-size:0.58rem; letter-spacing:0.08em; }
+    #statLine .chip { padding:4px 10px 4px 9px; gap:5px; }
+    #statLine .chip b { font-size:0.86rem; }
 
     #pulseWrap { padding:8px 12px calc(12px + env(safe-area-inset-bottom)); }
-    #pulseLabels { font-size:0.56rem; }
-    #pulseChart { height:64px; border-radius:10px; }
-    #pulseHint { font-size:0.56rem; margin-top:4px; letter-spacing:0; }
+    #pulseLabels { font-size:0.52rem; margin-bottom:4px; }
+    #pulseChart { height:64px; border-radius:12px; }
+    #pulseHint { font-size:0.56rem; margin-top:5px; letter-spacing:0; }
 
-    #loading .lg { font-size:1.15rem; padding:0 16px; text-align:center; }
+    #loading .lt { font-size:1.5rem; }
+    #loading .lg { font-size:0.74rem; }
 
+    .maplibregl-ctrl-top-right { top:6px; right:6px; }
     .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left { bottom:calc(122px + env(safe-area-inset-bottom)); }
+  }
+  @media (max-width: 360px) {
+    #statLine .live { display:none; }
   }
 
   ::selection { background: rgba(94,234,212,0.35); }
@@ -110,11 +224,12 @@
 
   <div id="statsHud">
     <div id="clockDisplay">00:00</div>
-    <div id="statLine">現在稼働中 ・ <span class="rail-label">鉄道 <b id="railCount">--</b> 台</span> ・ <span class="bus-label">バス <b id="busCount">--</b> 台</span></div>
+    <div id="todLabel"></div>
+    <div id="statLine"><span class="live">現在稼働中</span><span class="chip rail-label"><i></i>鉄道<b id="railCount">--</b><small>台</small></span><span class="chip bus-label"><i></i>バス<b id="busCount">--</b><small>台</small></span></div>
   </div>
 
   <div id="pulseWrap">
-    <div id="pulseLabels"><span>0時</span><span>6時</span><span>12時</span><span>18時</span><span>24時</span></div>
+    <div id="pulseLabels"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div>
     <div id="pulseChart">
       <svg id="pulseSvg" viewBox="0 0 1000 100" preserveAspectRatio="none"></svg>
       <div id="pulsePlayhead"></div>
@@ -125,7 +240,17 @@
     </div>
   </div>
 
-  <div id="loading"><div class="sp"></div><div class="lg">都市の鼓動を読み込み中…</div></div>
+  <div id="loading">
+    <svg class="ekg" viewBox="0 0 300 64" preserveAspectRatio="none" aria-hidden="true">
+      <defs><linearGradient id="loadEkgGrad" x1="0" x2="300" y1="0" y2="0" gradientUnits="userSpaceOnUse">
+        <stop offset="0" stop-color="#5eead4"/><stop offset="1" stop-color="#fb923c"/></linearGradient></defs>
+      <path class="base" pathLength="100" d="M0 34 H118 L128 34 L136 16 L148 56 L160 6 L172 46 L180 34 H300"/>
+      <path class="trace" pathLength="100" d="M0 34 H118 L128 34 L136 16 L148 56 L160 6 L172 46 L180 34 H300"/>
+    </svg>
+    <div class="lt">都市の鼓動</div>
+    <div class="le">CITY PULSE</div>
+    <div class="lg">街の鼓動を読み込んでいます…</div>
+  </div>
 </div>
 
 <script>
@@ -314,6 +439,102 @@ function updateSkyFx() {
 }
 
 /* ---------------------------------------------------------------- *
+ * 時間帯の色(UIのアクセント): 深夜の藍 → 夜明けの橙 → 日中の白 → 夕暮れの薔薇色 → 夜の菫
+ * ---------------------------------------------------------------- */
+const TOD_STOPS = [
+  { h: 0,    c: [140, 152, 255] },
+  { h: 4.5,  c: [150, 162, 255] },
+  { h: 5.8,  c: [255, 172, 124] },
+  { h: 7.5,  c: [190, 225, 255] },
+  { h: 12,   c: [222, 238, 255] },
+  { h: 16.5, c: [255, 206, 140] },
+  { h: 18.5, c: [255, 142, 172] },
+  { h: 20,   c: [186, 162, 255] },
+  { h: 22,   c: [140, 152, 255] },
+  { h: 24,   c: [140, 152, 255] },
+];
+const TOD_LABELS = [
+  { until: 4.5,  ja: '深夜',       en: 'LATE NIGHT' },
+  { until: 6,    ja: '夜明け',     en: 'DAWN' },
+  { until: 9.5,  ja: '朝ラッシュ', en: 'MORNING RUSH' },
+  { until: 16,   ja: '日中',       en: 'DAYTIME' },
+  { until: 19.5, ja: '夕ラッシュ', en: 'EVENING RUSH' },
+  { until: 22.5, ja: '夜',         en: 'EVENING' },
+  { until: 24,   ja: '深夜',       en: 'LATE NIGHT' },
+];
+const hudEls = () => ['topHud', 'statsHud', 'pulseWrap'].map((id) => document.getElementById(id));
+function setHudVar(name, value) { for (const el of hudEls()) el.style.setProperty(name, value); }
+
+let lastTod = '', lastTodLabel = '';
+function updateTod() {
+  const hour = (((simTime / 3600) % 24) + 24) % 24;
+  let c = TOD_STOPS[0].c;
+  for (let i = 0; i < TOD_STOPS.length - 1; i++) {
+    const a = TOD_STOPS[i], b = TOD_STOPS[i + 1];
+    if (hour >= a.h && hour <= b.h) { c = lerpRGB(a.c, b.c, (hour - a.h) / (b.h - a.h || 1)); break; }
+  }
+  const tod = c.join(',');
+  if (tod !== lastTod) { setHudVar('--tod', tod); lastTod = tod; }
+  const label = TOD_LABELS.find((l) => hour < l.until) || TOD_LABELS[TOD_LABELS.length - 1];
+  if (label.en + label.ja !== lastTodLabel) {
+    document.getElementById('todLabel').innerHTML = `<span class="en">${label.en}</span><span class="ja">${label.ja}</span>`;
+    lastTodLabel = label.en + label.ja;
+  }
+}
+
+/* ---------------------------------------------------------------- *
+ * 鼓動の同期: 稼働便数に応じた心拍数(深夜はゆっくり、ラッシュは速く)で
+ * タイトル・「現在稼働中」の点・再生位置を脈打たせる(ドクン・ドクッの2拍)
+ * ---------------------------------------------------------------- */
+const BPM_MIN = 42, BPM_MAX = 132;
+const REDUCE_MOTION = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+let beatBpm = BPM_MIN, beatPhase = 0;
+function updateHeartbeat(dtReal) {
+  const target = BPM_MIN + (BPM_MAX - BPM_MIN) * currentActivityRatio();
+  beatBpm += (target - beatBpm) * Math.min(1, dtReal * 1.5);
+  beatPhase = (beatPhase + Math.min(dtReal, 0.25) * beatBpm / 60) % 1;
+  const f = beatPhase;
+  const p = REDUCE_MOTION ? 0 : Math.exp(-(((f - 0.05) / 0.045) ** 2)) + 0.55 * Math.exp(-(((f - 0.24) / 0.05) ** 2));
+  setHudVar('--p', p.toFixed(3));
+}
+
+/* ---------------------------------------------------------------- *
+ * ベースマップ(CARTO dark-matter)を作品の色に寄せる: 地名・道路を沈め、光の軌跡を主役にする
+ * ---------------------------------------------------------------- */
+function themeBasemap() {
+  const style = map.getStyle();
+  if (!style || !style.layers) return;
+  const paint = (id, prop, v) => { try { map.setPaintProperty(id, prop, v); } catch (e) { /* 無いプロパティは無視 */ } };
+  const layout = (id, prop, v) => { try { map.setLayoutProperty(id, prop, v); } catch (e) { /* 同上 */ } };
+  for (const l of style.layers) {
+    const id = l.id;
+    if (l.type === 'background') paint(id, 'background-color', '#04060d');
+    else if (l.type === 'fill') {
+      if (id === 'water') paint(id, 'fill-color', '#08161f');
+      else if (id.startsWith('building')) paint(id, 'fill-color', '#0b1020');
+      else if (/^(landcover|landuse|park)/.test(id)) paint(id, 'fill-color', '#05070f');
+    } else if (l.type === 'line') {
+      if (id === 'waterway') paint(id, 'line-color', '#0e2a33');
+      else if (id.startsWith('boundary')) paint(id, 'line-color', '#1a2238');
+      else if (/_case/.test(id)) paint(id, 'line-color', '#04060d');
+      else if (/rail/.test(id)) paint(id, 'line-color', '#0f1626');
+      else if (/_(pri|trunk|mot)_fill/.test(id)) paint(id, 'line-color', '#1a2540');
+      else if (/_sec_fill/.test(id)) paint(id, 'line-color', '#141d33');
+      else if (/(_fill|_path)/.test(id)) paint(id, 'line-color', '#0e1426');
+    } else if (l.type === 'symbol') {
+      if (/^(roadname|poi|housenumber|place_hamlet|place_villages|watername_lake_line|waterway_label)/.test(id)) {
+        layout(id, 'visibility', 'none');
+      } else {
+        paint(id, 'text-color', 'rgba(150,165,190,0.55)');
+        paint(id, 'text-halo-color', 'rgba(3,4,10,0.85)');
+        paint(id, 'icon-opacity', 0.35);
+        layout(id, 'text-letter-spacing', 0.24);
+      }
+    }
+  }
+}
+
+/* ---------------------------------------------------------------- *
  * 天気の熱波エフェクト(モグルートと同じ表現手法)
  * ---------------------------------------------------------------- */
 function updateWeatherFx() {
@@ -364,25 +585,40 @@ function drawPulseChart() {
   svg.innerHTML = `
     <defs>
       <linearGradient id="pulseGradRail" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#5eead4" stop-opacity="0.6"/>
-        <stop offset="100%" stop-color="#5eead4" stop-opacity="0.05"/>
+        <stop offset="0%" stop-color="#5eead4" stop-opacity="0.5"/>
+        <stop offset="60%" stop-color="#5eead4" stop-opacity="0.16"/>
+        <stop offset="100%" stop-color="#5eead4" stop-opacity="0.02"/>
       </linearGradient>
       <linearGradient id="pulseGradBus" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#fb923c" stop-opacity="0.55"/>
-        <stop offset="100%" stop-color="#fb923c" stop-opacity="0.15"/>
+        <stop offset="0%" stop-color="#fb923c" stop-opacity="0.42"/>
+        <stop offset="100%" stop-color="#fb923c" stop-opacity="0.08"/>
       </linearGradient>
+      <filter id="pulseGlow" x="-5%" y="-50%" width="110%" height="200%">
+        <feGaussianBlur stdDeviation="2 1.6" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
     </defs>
     <path d="${railArea}" fill="url(#pulseGradRail)" />
     <path d="${busArea}" fill="url(#pulseGradBus)" />
-    <path d="${railLine}" fill="none" stroke="#5eead4" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" />
-    <path d="${totalLine}" fill="none" stroke="#fb923c" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" />
+    <g filter="url(#pulseGlow)">
+      <path d="${railLine}" fill="none" stroke="#5eead4" stroke-width="1.6" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round" />
+      <path d="${totalLine}" fill="none" stroke="#fb923c" stroke-width="1.6" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round" />
+    </g>
   `;
 }
 
+let lastClockHour = null;
 function updatePlayhead() {
   const frac = simTime / pulseData.duration_sec;
   document.getElementById('pulsePlayhead').style.left = (frac * 100) + '%';
-  document.getElementById('clockDisplay').textContent = fmtClock(simTime);
+  const clock = document.getElementById('clockDisplay');
+  clock.textContent = fmtClock(simTime);
+  // 毎正時に時計がふっと光る(分単位は約0.2秒ごとに変わるため、演出は時の変わり目だけ)
+  const hourNow = Math.floor(simTime / 3600);
+  if (hourNow !== lastClockHour) {
+    if (lastClockHour !== null) { clock.classList.remove('chime'); void clock.offsetWidth; clock.classList.add('chime'); }
+    lastClockHour = hourNow;
+  }
 
   const bucketIdx = Math.min(pulseData.activity.length - 1, Math.floor(simTime / pulseData.bucket_sec));
   const bucket = pulseData.activity[bucketIdx];
@@ -485,6 +721,7 @@ function render() {
   if (!deckOverlay) return;
   deckOverlay.setProps({ layers: buildLayers() });
   updateSkyFx();
+  updateTod();
   updatePlayhead();
 }
 
@@ -499,6 +736,7 @@ function tick(ts) {
     colorTick++;
   }
   render();
+  updateHeartbeat(dtReal);
 
   if (Date.now() - lastUserActionTs > IDLE_BEFORE_AUTOROTATE_MS) {
     map.setBearing((map.getBearing() + dtReal * AUTO_ROTATE_DEG_PER_SEC) % 360);
@@ -593,6 +831,8 @@ async function init() {
     container: 'map', style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
     ...camera, pitch: 38, bearing: 0, antialias: true, attributionControl: true,
   });
+
+  map.once('load', themeBasemap);
 
   // 画面の大きさが確定する前(非表示タブなど)に範囲合わせが行われるとズレるため、大きさが分かった時点で合わせ直す
   if (camera.bounds) {

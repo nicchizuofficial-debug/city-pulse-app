@@ -22,15 +22,32 @@ const Home = (() => {
     return `
     <div class="wrap">
       <div class="brand">
+        <div class="kicker">PUBLIC TRANSIT <i></i> GTFS <i></i> 24 HOURS</div>
         <h1>都市の鼓動</h1>
         <div class="en">CITY PULSE</div>
+        <svg class="ekg" viewBox="0 0 520 56" preserveAspectRatio="none" aria-hidden="true">
+          <defs><linearGradient id="homeEkgGrad" x1="0" x2="520" y1="0" y2="0" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#5eead4" stop-opacity="0"/><stop offset="0.3" stop-color="#5eead4"/>
+            <stop offset="0.7" stop-color="#fb923c"/><stop offset="1" stop-color="#fb923c" stop-opacity="0"/></linearGradient></defs>
+          <path class="base" pathLength="100" d="M0 30 H200 L212 30 L220 14 L232 50 L244 4 L256 42 L264 30 H520"/>
+          <path class="trace" pathLength="100" d="M0 30 H200 L212 30 L220 14 L232 50 L244 4 L256 42 L264 30 H520"/>
+        </svg>
         <p>時刻表データ(GTFS)から、街の24時間の“鼓動”をつくります。<br>GTFSを入れ替えれば、日本のほかの都市でも同じ表現で作れます。</p>
       </div>
 
       <h2>サンプル</h2>
-      <div class="card">
+      <div class="card feature">
+        <svg class="spark" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
+          <defs>
+            <linearGradient id="homeSparkLine" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#5eead4"/><stop offset="1" stop-color="#fb923c"/></linearGradient>
+            <linearGradient id="homeSparkFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#5eead4" stop-opacity="0.22"/><stop offset="1" stop-color="#5eead4" stop-opacity="0"/></linearGradient>
+          </defs>
+          <path fill="url(#homeSparkFill)" d="M0 88 L41.7 92 L83.3 96 L187.5 96 L208.3 86 L250 55 L291.7 28 L333.3 18 L375 30 L416.7 42 L500 44 L625 40 L708.3 26 L750 20 L791.7 30 L875 50 L958.3 72 L1000 84 L1000 100 L0 100 Z"/>
+          <path fill="none" stroke="url(#homeSparkLine)" stroke-width="1.5" vector-effect="non-scaling-stroke" stroke-linejoin="round" d="M0 88 L41.7 92 L83.3 96 L187.5 96 L208.3 86 L250 55 L291.7 28 L333.3 18 L375 30 L416.7 42 L500 44 L625 40 L708.3 26 L750 20 L791.7 30 L875 50 L958.3 72 L1000 84"/>
+        </svg>
         <div class="row">
           <div>
+            <div class="tag">TOKYO · 35.68°N 139.75°E</div>
             <div class="city-name">東京23区</div>
             <div class="city-sub">都営地下鉄・都営バス・JR東日本 ／ 建物: OpenStreetMap(中高層)</div>
           </div>
@@ -64,7 +81,7 @@ const Home = (() => {
       </div>
 
       <div class="note">
-        <b>ご利用にあたって</b><br>
+        <b class="note-h">ご利用にあたって</b>
         ・GTFSの処理はすべてこの端末のブラウザ内で行い、GTFSファイルはサーバーへ送信されません。作成した都市もこの端末内にだけ保存されます。<br>
         ・運行は、GTFSから選んだ代表的な平日ダイヤ1日分です。<br>
         ・建物はOpenStreetMap(© OpenStreetMap contributors。ベクトルタイルは OpenFreeMap / © OpenMapTiles)から取得します。中心部は細かい建物まで、周辺は高い建物中心に絞ります。取得できない場合はOverpass API、OSMに建物がほとんど無い地域は、運行頻度から作る250mメッシュで代替します(PLATEAUは1タイルが約13MBと重いため対象外)。<br>
