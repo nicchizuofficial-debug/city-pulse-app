@@ -25,6 +25,7 @@
 <script src="/static/mvt.js"></script>
 <script src="/static/buildings.js"></script>
 <script src="/static/home.js"></script>
+<script src="/static/sound.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;500;700&family=Shippori+Mincho+B1:wght@600;800&display=swap" rel="stylesheet">
@@ -85,6 +86,16 @@
     padding:4px 12px 4px 10px; border-radius:999px; background:var(--glass); border:1px solid var(--line);
     backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); transition:color .2s, border-color .2s, background .2s; }
   #titleBlock .h:hover { color:var(--rail); border-color:rgba(94,234,212,0.45); background:rgba(94,234,212,0.1); }
+  /* サウンドボタン(ONのときは時間帯の色で脈打つ) */
+  #titleBlock .snd { font:inherit; font-size:inherit; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+  #titleBlock .snd svg { width:13px; height:13px; fill:currentColor; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; }
+  #titleBlock .snd svg path:first-child { stroke:none; }
+  #titleBlock .snd .ic-on { display:none; }
+  #titleBlock .snd.on .ic-on { display:inline; }
+  #titleBlock .snd.on .ic-off { display:none; }
+  #titleBlock .snd.on { color:rgb(var(--tod)); border-color:rgba(var(--tod),0.5);
+    box-shadow:0 0 calc(var(--p) * 14px) rgba(var(--tod), calc(var(--p) * 0.5)); }
+  #titleBlock .snd.wants { border-style:dashed; }
 
   /* 時計と稼働数 */
   #statsHud { position:absolute; top:20px; left:50%; transform:translateX(-50%); z-index:6; text-align:center;
@@ -179,7 +190,9 @@
     #titleBlock .s { font-size:0.5rem; margin-top:5px; }
     #titleBlock .s::before { display:none; }
 
-    #statsHud { top:78px; width:calc(100% - 28px); max-width:380px; }
+    #statsHud { top:100px; width:calc(100% - 28px); max-width:380px; }
+    #titleBlock .snd .lbl { display:none; }
+    #titleBlock .snd { padding:4px 9px; }
     #titleBlock .sub2 { font-size:0.6rem; margin-top:7px; }
     #clockDisplay { font-size:2.5rem; }
     #todLabel { margin-top:5px; }
@@ -218,7 +231,7 @@
     <div id="titleBlock">
       <div class="t">都市の鼓動</div>
       <div class="s">CITY PULSE</div>
-      <div class="sub2"><span class="c" id="cityLabel"></span><a class="h" href="./">‹ ホーム</a></div>
+      <div class="sub2"><span class="c" id="cityLabel"></span><a class="h" href="./">‹ ホーム</a><button class="h snd" id="soundBtn" type="button" aria-pressed="false"><svg class="ic-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M17 9l4 6M21 9l-4 6" fill="none"/></svg><svg class="ic-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12" fill="none"/></svg><span class="lbl">サウンド</span></button></div>
     </div>
   </div>
 
@@ -492,10 +505,15 @@ let beatBpm = BPM_MIN, beatPhase = 0;
 function updateHeartbeat(dtReal) {
   const target = BPM_MIN + (BPM_MAX - BPM_MIN) * currentActivityRatio();
   beatBpm += (target - beatBpm) * Math.min(1, dtReal * 1.5);
+  const prevPhase = beatPhase;
   beatPhase = (beatPhase + Math.min(dtReal, 0.25) * beatBpm / 60) % 1;
   const f = beatPhase;
   const p = REDUCE_MOTION ? 0 : Math.exp(-(((f - 0.05) / 0.045) ** 2)) + 0.55 * Math.exp(-(((f - 0.24) / 0.05) ** 2));
   setHudVar('--p', p.toFixed(3));
+  // 音: 拍の頭を越えたら、この拍の「ドクン・ドクッ」を画面の脈と同じ位置に予約する
+  const ratio = currentActivityRatio();
+  if (f < prevPhase) CitySound.beat(60 / beatBpm, ratio, f);
+  CitySound.update(simTime / 3600, ratio);
 }
 
 /* ---------------------------------------------------------------- *
@@ -714,7 +732,61 @@ function buildLayers() {
     }));
   }
 
+  // 運行の粒が鳴った場所の波紋(サウンドONのときだけ)
+  if (ripples.length) {
+    const now = performance.now();
+    ripples = ripples.filter((r) => now - r.t0 < RIPPLE_MS);
+    layers.push(new deck.ScatterplotLayer({
+      id: 'sound-ripples', data: ripples.map((r) => ({ ...r, a: (now - r.t0) / RIPPLE_MS })),
+      getPosition: (d) => d.position, stroked: true, filled: false, radiusUnits: 'pixels', lineWidthUnits: 'pixels',
+      getRadius: (d) => 4 + 24 * (1 - Math.pow(1 - d.a, 3)), getLineWidth: (d) => 2.6 - 1.4 * d.a,
+      getLineColor: (d) => [...(d.mode === 'rail' ? GLOW_RAIL : GLOW_BUS), Math.round(255 * (1 - d.a))],
+      parameters: { depthTest: false },
+    }));
+  }
+
   return layers;
+}
+
+/* ---------------------------------------------------------------- *
+ * 運行の粒(サウンドONのとき): 画面内で駅・停留所に着いた便を音にし、その場所に小さな波紋を出す。
+ * 1秒あたりの数は運行量に比例させて間引く(sound.js の allow)
+ * ---------------------------------------------------------------- */
+const RIPPLE_MS = 1400;
+let ripples = [];
+let lastArrivalSim = null;
+function soundArrivals() {
+  if (!CitySound.isOn()) { lastArrivalSim = null; return; }
+  const from = lastArrivalSim, to = simTime;
+  lastArrivalSim = to;
+  if (from === null || to <= from || to - from > 600) return;   // 最初の1回・巻き戻し・スクラブでの大きな移動は鳴らさない
+  const ratio = currentActivityRatio();
+  let quota = CitySound.allow(ratio);
+  if (!quota) return;
+  const b = map.getBounds();
+  const w = b.getWest(), e = b.getEast(), s = b.getSouth(), n = b.getNorth();
+  const cands = [];
+  for (const trip of pulseData.trips) {
+    const ts = trip.timestamps;
+    if (!ts || ts[0] > to || ts[ts.length - 1] <= from) continue;
+    for (let k = 0; k < ts.length; k++) {
+      if (ts[k] > to) break;
+      if (ts[k] > from) {
+        const p = trip.path[k];
+        if (p[0] >= w && p[0] <= e && p[1] >= s && p[1] <= n) cands.push({ p, mode: trip.mode });
+        break;
+      }
+    }
+  }
+  const el = map.getContainer(), W = el.clientWidth, H = el.clientHeight;
+  while (quota > 0 && cands.length) {
+    const c = cands.splice(Math.floor(Math.random() * cands.length), 1)[0];
+    const pt = map.project(c.p);
+    if (pt.x < 0 || pt.y < 0 || pt.x > W || pt.y > H) continue;   // 斜めから見ているとき、範囲内でも画面外のことがある
+    CitySound.note(c.mode, pt.x / W, pt.y / H);
+    ripples.push({ position: c.p, mode: c.mode, t0: performance.now() });
+    quota--;
+  }
 }
 
 function render() {
@@ -735,6 +807,7 @@ function tick(ts) {
     lastColorTickAt = ts;
     colorTick++;
   }
+  soundArrivals();
   render();
   updateHeartbeat(dtReal);
 
@@ -809,6 +882,7 @@ async function addTokyoJr() {
 async function init() {
   const cityId = new URLSearchParams(location.search).get('city');
   if (!cityId) { Home.start(); return; }
+  CitySound.attach(document.getElementById('soundBtn'));
 
   let camera;
   if (cityId === 'tokyo') {
