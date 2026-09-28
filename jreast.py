@@ -11,6 +11,7 @@
 import csv
 import io
 import os
+import re
 import threading
 import time
 import zipfile
@@ -205,12 +206,22 @@ def _resolve_prefectures(stop_lon, stop_lat) -> array:
     return array("b", codes)
 
 
+def redact(msg) -> str:
+    """例外メッセージに含まれうるアクセストークン(URLのクエリ)を伏せる。外部へ返す文字列は必ずこれを通す。"""
+    return re.sub(r"(consumerKey(?:=|%3D))[^&\s'\"]+", r"\1***", str(msg))
+
+
 def _download() -> bytes:
     token = _token()
     if not token:
         raise RuntimeError("ODPT_CHALLENGE_TOKEN が設定されていません")
-    r = requests.get(GTFS_URL, params={"acl:consumerKey": token}, timeout=120, allow_redirects=True)
-    r.raise_for_status()
+    # requests の例外文にはトークン付きURLが入るため、状態コード・例外名だけの文言に置き換える
+    try:
+        r = requests.get(GTFS_URL, params={"acl:consumerKey": token}, timeout=120, allow_redirects=True)
+    except requests.RequestException as e:
+        raise RuntimeError(f"JR東日本GTFSの取得に失敗しました({type(e).__name__})") from None
+    if r.status_code != 200:
+        raise RuntimeError(f"JR東日本GTFSの取得に失敗しました(HTTP {r.status_code})")
     return r.content
 
 
@@ -229,7 +240,7 @@ def ensure_loaded():
             _state["loaded_at"] = time.time()
             _state["error"] = None
         except Exception as e:  # noqa: BLE001
-            _state["error"] = str(e)
+            _state["error"] = redact(e)
             if _state["data"] is None:
                 raise
         finally:
@@ -246,13 +257,14 @@ def warm_up():
         try:
             ensure_loaded()
         except Exception as e:  # noqa: BLE001
-            _state["error"] = str(e)
+            _state["error"] = redact(e)
 
     threading.Thread(target=run, daemon=True).start()
 
 
 def status() -> dict:
-    return {"has_token": has_token(), "loaded": _state["data"] is not None, "loading": _state["loading"], "error": _state["error"]}
+    error = redact(_state["error"]) if _state["error"] else None
+    return {"has_token": has_token(), "loaded": _state["data"] is not None, "loading": _state["loading"], "error": error}
 
 
 def trips_in_window(west: float, south: float, east: float, north: float, filter_prefectures: bool = True) -> dict:

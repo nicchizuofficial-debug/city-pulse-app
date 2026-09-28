@@ -83,7 +83,7 @@ def jr_east(w: float, s: float, e: float, n: float, prefs: str = "auto"):
     try:
         return jreast.trips_in_window(w, s, e, n, filter_prefectures=(prefs != "all"))
     except Exception as ex:  # noqa: BLE001
-        return {"available": False, "reason": f"JR東日本データを取得できませんでした: {ex}"}
+        return {"available": False, "reason": f"JR東日本データを取得できませんでした: {jreast.redact(ex)}"}
 
 
 @app.get("/api/jr-east/status")
