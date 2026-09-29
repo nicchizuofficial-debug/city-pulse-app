@@ -76,6 +76,10 @@ body.home #map { display: none; }
 #home .card.feature:hover { border-color: rgba(94,234,212,0.28); transform: translateY(-2px); }
 #home .card.feature .spark { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 48px; opacity: 0.8; pointer-events: none; }
 #home .card.feature .row { position: relative; }
+/* 紹介動画 */
+#home .card.video { padding: 0; overflow: hidden; }
+#home .card.video video { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; }
+#home .vcap { margin-top: 10px; font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.14em; color: var(--dim); text-align: right; }
 #home .tag { font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.18em; color: var(--mute); margin-bottom: 6px; }
 
 #home .row { display: flex; align-items: center; justify-content: space-between; gap: 14px; }

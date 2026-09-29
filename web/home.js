@@ -35,6 +35,14 @@ const Home = (() => {
         <p>時刻表データ(GTFS)から、街の24時間の“鼓動”をつくります。<br>GTFSを入れ替えれば、日本のほかの都市でも同じ表現で作れます。</p>
       </div>
 
+      <h2>紹介動画</h2>
+      <div class="card video">
+        <video controls playsinline preload="none" poster="/static/media/city_pulse_intro_poster.jpg" aria-label="都市の鼓動 紹介動画(1分30秒)">
+          <source src="/static/media/city_pulse_intro_720p.mp4" type="video/mp4">
+        </video>
+      </div>
+      <div class="vcap">1分30秒 ・ 音が出ます ・ 東京・横浜・宇都宮の実データで制作</div>
+
       <h2>サンプル</h2>
       <div class="card feature">
         <svg class="spark" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">

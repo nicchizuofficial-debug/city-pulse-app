@@ -36,8 +36,18 @@ JMA_NOWCAST_TARGET_TIMES = "https://www.jma.go.jp/bosai/jmatile/data/nowc/target
 WBGT_POINT_NO = 44132  # 東京(文京区小石川植物園) - 対象エリア(千代田区)に最も近い公式観測地点
 CENTER_LAT, CENTER_LON = 35.6866, 139.7622  # 対象エリア(千代田区)中心付近
 
+class GZipExceptMedia(GZipMiddleware):
+    """動画は圧縮しない(すでに圧縮済みのうえ、再生に必要な部分取得(Range / 206)を壊さないため)"""
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and scope["path"].endswith((".mp4", ".webm")):
+            await self.app(scope, receive, send)
+            return
+        await super().__call__(scope, receive, send)
+
+
 app = FastAPI(title="City Pulse API", description="都市の鼓動 - 24時間ビジュアライザー用バックエンド")
-app.add_middleware(GZipMiddleware, minimum_size=1024)
+app.add_middleware(GZipExceptMedia, minimum_size=1024)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
